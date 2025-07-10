@@ -40,6 +40,13 @@ android {
 }
 
 dependencies {
+    // Retrofit untuk networking
+    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+// Gson converter untuk mengubah JSON menjadi objek Kotlin
+    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
+// Coroutines untuk menjalankan proses di background thread
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.6.2") // untuk lifecycleScope
     implementation("com.airbnb.android:lottie:6.3.0")
     implementation("androidx.core:core-splashscreen:1.0.1")
     implementation("com.google.android.material:material:1.12.0")

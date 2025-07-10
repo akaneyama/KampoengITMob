@@ -2,97 +2,98 @@ package com.daffaadityapurwanto.kampoengitapp
 
 import android.content.Intent
 import android.os.Bundle
+import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.widget.doOnTextChanged
+import androidx.lifecycle.lifecycleScope
 import com.daffaadityapurwanto.kampoengitapp.databinding.ActivityLoginBinding
+import com.daffaadityapurwanto.kampoengitapp.network.ApiClient
+import com.daffaadityapurwanto.kampoengitapp.network.LoginRequest
+import com.daffaadityapurwanto.kampoengitapp.utils.SessionManager
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
+import com.daffaadityapurwanto.kampoengitapp.network.ErrorResponse
+import kotlinx.coroutines.launch
 
 class LoginActivity : AppCompatActivity() {
 
-    // Deklarasikan variabel untuk view binding agar bisa diakses di seluruh class
     private lateinit var binding: ActivityLoginBinding
+    private lateinit var sessionManager: SessionManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        // Inisialisasi View Binding untuk layout activity_login.xml
         binding = ActivityLoginBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // Mengatur listener untuk tombol login
+        // Inisialisasi SessionManager
+        sessionManager = SessionManager(this)
+
         binding.loginButton.setOnClickListener {
-            // Memanggil fungsi untuk validasi saat tombol ditekan
             validateAndLogin()
         }
 
-        // Mengatur listener untuk link "Daftar di sini"
         binding.registerLinkText.setOnClickListener {
-            Toast.makeText(this, "Membuka halaman pendaftaran...", Toast.LENGTH_SHORT).show()
-            // Di sini Anda bisa membuat Intent untuk pindah ke RegisterActivity
-            // val intent = Intent(this, RegisterActivity::class.java)
-            // startActivity(intent)
-        }
-
-        // Menghapus pesan error secara otomatis saat pengguna mulai mengetik ulang
-        setupErrorClearing()
-    }
-
-    /**
-     * Fungsi untuk menghapus pesan error saat pengguna mengedit input field.
-     */
-    private fun setupErrorClearing() {
-        binding.emailEditText.doOnTextChanged { _, _, _, _ ->
-            binding.emailInputLayout.error = null
-        }
-        binding.passwordEditText.doOnTextChanged { _, _, _, _ ->
-            binding.passwordInputLayout.error = null
+            val intent = Intent(this, RegisterActivity::class.java)
+            startActivity(intent)
         }
     }
 
-    /**
-     * Fungsi untuk memvalidasi input email dan password.
-     */
+    // ... (fungsi setupErrorClearing() tetap sama)
+
     private fun validateAndLogin() {
         val email = binding.emailEditText.text.toString().trim()
         val password = binding.passwordEditText.text.toString().trim()
-        var isFormValid = true
 
-        // 1. Validasi input email
-        if (email.isEmpty()) {
-            binding.emailInputLayout.error = "Email tidak boleh kosong"
-            isFormValid = false
-        } else if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
-            binding.emailInputLayout.error = "Format email tidak valid"
-            isFormValid = false
-        } else {
-            binding.emailInputLayout.error = null
+        // Validasi client-side (opsional, karena validasi utama ada di sini)
+        if (email.isEmpty() || password.isEmpty()) {
+            Toast.makeText(this, "Email dan password tidak boleh kosong", Toast.LENGTH_SHORT).show()
+            return
         }
 
-        // 2. Validasi input password
-        if (password.isEmpty()) {
-            binding.passwordInputLayout.error = "Password tidak boleh kosong"
-            isFormValid = false
-        } else if (password.length < 6) {
-            binding.passwordInputLayout.error = "Password minimal 6 karakter"
-            isFormValid = false
-        } else {
-            binding.passwordInputLayout.error = null
-        }
+        // Tampilkan loading dan nonaktifkan tombol
+        binding.loginButton.isEnabled = false
+        binding.progressBar.visibility = View.VISIBLE
 
-        // 3. Jika semua input valid, lanjutkan proses login
-        if (isFormValid) {
-            // --- LOGIKA LOGIN SEBENARNYA DITARUH DI SINI ---
-            // Saat ini kita hanya menampilkan pesan sukses dan pindah halaman.
-            // Di aplikasi nyata, di sini Anda akan berkomunikasi dengan server/database.
+        // Gunakan lifecycleScope untuk menjalankan coroutine
+        lifecycleScope.launch {
+            try {
+                // Buat request body
+                val loginRequest = LoginRequest(username = email, password = password)
 
-            Toast.makeText(this, "Login Berhasil!", Toast.LENGTH_SHORT).show()
+                // Panggil API
+                val response = ApiClient.instance.login(loginRequest)
 
-            // Contoh pindah ke halaman utama (misal: HomeActivity)
-            // val intent = Intent(this, HomeActivity::class.java)
-            // startActivity(intent)
+                // Cek hasil response
+                if (response.isSuccessful) {
+                    // Jika sukses (kode 2xx)
+                    val accessToken = response.body()?.accessToken
+                    if (accessToken != null) {
+                        // Simpan token
+                        sessionManager.saveAuthToken(accessToken)
 
-            // Tutup LoginActivity agar pengguna tidak bisa kembali ke sini dengan tombol back
-            // finish()
+                        Toast.makeText(this@LoginActivity, "Login Berhasil!", Toast.LENGTH_LONG).show()
+
+                        // Pindah ke halaman utama
+                        // val intent = Intent(this@LoginActivity, HomeActivity::class.java)
+                        // startActivity(intent)
+                        // finish() // Tutup activity ini
+                    }
+                } else {
+                    // Jika gagal (kode 4xx atau 5xx)
+                    val errorBody = response.errorBody()?.string()
+                    val errorResponse = Gson().fromJson<ErrorResponse>(errorBody, object : TypeToken<ErrorResponse>() {}.type)
+                    Toast.makeText(this@LoginActivity, errorResponse.msg, Toast.LENGTH_LONG).show()
+                }
+
+            } catch (e: Exception) {
+                // Tangani error koneksi (misal: tidak ada internet)
+                Toast.makeText(this@LoginActivity, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+            } finally {
+                // Sembunyikan loading dan aktifkan kembali tombol
+                binding.loginButton.isEnabled = true
+                binding.progressBar.visibility = View.GONE
+            }
         }
     }
 }
